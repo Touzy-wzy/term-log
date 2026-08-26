@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shlex
 import subprocess
 import sys
@@ -30,7 +31,7 @@ def main(argv=None) -> int:
     process = subprocess.Popen(
         args,
         cwd=service.get("cwd"),
-        env=service.get("env"),
+        env={**os.environ, **service.get("env", {})} if service.get("env") else None,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=False,

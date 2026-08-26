@@ -36,3 +36,25 @@ def test_main_writes_output_and_exit_code_to_named_file(tmp_path, monkeypatch):
     assert "service_start" in content
     assert "service_exit" in content
     assert "exit_code=0" in content
+
+
+ENV_CMD = "python -c \"import os; print(os.environ.get('TERMLOG_TEST_VAR', 'MISSING'))\""
+
+
+def test_env_block_merges_with_parent_env_instead_of_replacing(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    _write_config(tmp_path, [{"name": "envtest", "command": ENV_CMD, "cwd": str(tmp_path)}])
+    config_path = paths.config_path()
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8") + "    env:\n      TERMLOG_TEST_VAR: hello\n",
+        encoding="utf-8",
+    )
+
+    exit_code = service_collector.main(["envtest", "E:/proj", "envtest.log"])
+
+    assert exit_code == 0
+    log_path = paths.services_dir("E:/proj", "envtest") / "envtest.log"
+    content = log_path.read_text(encoding="utf-8", errors="replace")
+    output_lines = [line for line in content.splitlines() if "###" not in line]
+    assert any("hello" in line for line in output_lines)
+    assert not any("MISSING" in line for line in output_lines)
