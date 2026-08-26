@@ -1,3 +1,5 @@
+import sys
+
 from termlog import hook_targets, hooks
 
 
@@ -24,6 +26,21 @@ def test_install_all_creates_missing_files(monkeypatch, tmp_path):
         assert result["path"].exists()
         content = result["path"].read_text(encoding="utf-8")
         assert "TERMLOG_SESSION" in content
+
+
+def test_install_all_embeds_the_running_interpreters_absolute_path(monkeypatch, tmp_path):
+    # Regression test: the hook must invoke the exact interpreter that ran
+    # `termlog hook install` (guaranteed to have termlog importable), not a
+    # bare "python" resolved from whatever PATH a future shell happens to
+    # have. A bare "python" previously caused every newly opened terminal to
+    # fail outright whenever its default python lacked termlog.
+    monkeypatch.setattr(hook_targets, "_home", lambda: tmp_path)
+    results = hook_targets.install_all()
+    for result in results:
+        content = result["path"].read_text(encoding="utf-8")
+        assert " python -m termlog.recorder" not in content
+        normalized_executable = sys.executable.replace("\\", "/")
+        assert normalized_executable in content or sys.executable in content
 
 
 def test_install_all_is_idempotent(monkeypatch, tmp_path):

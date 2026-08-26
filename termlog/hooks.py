@@ -6,23 +6,45 @@ POWERSHELL_MARKER_START = "# >>> termlog hook >>>"
 POWERSHELL_MARKER_END = "# <<< termlog hook <<<"
 
 
-def bash_snippet() -> str:
+def bash_snippet(python_executable: str) -> str:
+    # Bash treats backslashes specially even inside double quotes, so a raw
+    # Windows path (e.g. "E:\termlog\.venv\Scripts\python.exe") would be
+    # mangled. Windows accepts forward slashes in paths just as well, so
+    # normalize to avoid that without needing extra escaping.
+    python_path = python_executable.replace("\\", "/")
     return (
         f"{BASH_MARKER_START}\n"
-        'if [ -z "$TERMLOG_SESSION" ]; then\n'
-        '  export TERMLOG_SESSION=1\n'
-        '  exec python -m termlog.recorder\n'
-        "fi\n"
+        # `$-` lists the shell's active option flags; bash includes "i" in
+        # it only for an interactive shell. Non-interactive invocations
+        # (scripts, tools running `bash -c "..."`, this recorder's own
+        # relaunched shell) never get "i". The recording logic is nested
+        # inside this case branch (rather than guarded by an early
+        # return/exit) so a non-interactive shell that sources .bashrc as
+        # part of its own setup — then keeps running more commands — is
+        # never short-circuited; it just skips straight past this block.
+        'case "$-" in\n'
+        "  *i*)\n"
+        '    if [ -z "$TERMLOG_SESSION" ]; then\n'
+        '      export TERMLOG_SESSION=1\n'
+        f'      exec "{python_path}" -m termlog.recorder\n'
+        "    fi\n"
+        "    ;;\n"
+        "esac\n"
         f"{BASH_MARKER_END}\n"
     )
 
 
-def powershell_snippet() -> str:
+def powershell_snippet(python_executable: str) -> str:
     return (
         f"{POWERSHELL_MARKER_START}\n"
-        'if (-not $env:TERMLOG_SESSION) {\n'
+        # [Environment]::UserInteractive is false for non-interactive
+        # invocations (scripts, tools running powershell -Command "...",
+        # this recorder's own relaunched shell). Skipping those avoids
+        # handing them to a recorder that would block forever waiting for
+        # keyboard input nobody is going to provide.
+        "if ([Environment]::UserInteractive -and (-not $env:TERMLOG_SESSION)) {\n"
         '    $env:TERMLOG_SESSION = "1"\n'
-        "    python -m termlog.recorder\n"
+        f'    & "{python_executable}" -m termlog.recorder\n'
         "    exit $LASTEXITCODE\n"
         "}\n"
         f"{POWERSHELL_MARKER_END}\n"
