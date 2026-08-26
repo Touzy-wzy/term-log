@@ -1,6 +1,7 @@
 import os
 import sys
 
+from termlog import cleanup
 from termlog.recorder.session import RecordedSession, detect_shell
 
 SHELL_COMMANDS = {
@@ -27,6 +28,7 @@ def main() -> int:
         exit_code = unix_backend.run(command, session)
 
     session.end(exit_code=exit_code)
+    cleanup.run_cleanup()
     return exit_code
 
 
