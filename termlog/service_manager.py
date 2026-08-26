@@ -1,16 +1,14 @@
 from __future__ import annotations
 
 import os
-import shlex
 import signal
 import subprocess
 import sys
-import threading
 import time
-from typing import List, Optional
+from datetime import datetime
+from typing import List
 
 from termlog import config, paths, state
-from termlog.storage import LineBuffer, LogWriter
 
 
 def _is_alive(pid: int) -> bool:
@@ -28,45 +26,37 @@ def _is_alive(pid: int) -> bool:
         return False
 
 
-def _pump_output(process: subprocess.Popen, writer: LogWriter, line_buffer: LineBuffer) -> None:
-    for stream in (process.stdout, process.stderr):
-        if stream is None:
-            continue
-        for raw_line in stream:
-            line_buffer.feed(raw_line if isinstance(raw_line, bytes) else raw_line.encode("utf-8"))
-    line_buffer.flush()
-
-    exit_code = process.wait()
-    writer.write_meta("service_exit", exit_code=exit_code)
-    writer.close()
-
-
 def start(name: str, project_path: str) -> int:
     service = config.find_service(name)
     if service is None:
         raise ValueError(f"No service named '{name}' in termlog.yaml")
 
-    max_size_mb = config.load_config()["max_log_size_mb"]
-    writer = LogWriter(paths.services_dir(project_path, name), prefix=name, max_size_mb=max_size_mb)
-    line_buffer = LineBuffer(writer)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S_%f")[:-3]
+    log_filename = f"{name}_{timestamp}.log"
 
-    command = service["command"]
-    args = command if sys.platform == "win32" else shlex.split(command)
-    process = subprocess.Popen(
-        args,
-        cwd=service.get("cwd"),
-        env=service.get("env"),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=False,
-        shell=sys.platform == "win32",
-    )
+    collector_cmd = [sys.executable, "-m", "termlog.service_collector", name, project_path, log_filename]
 
-    writer.write_meta("service_start", name=name, command=command, pid=process.pid)
-    thread = threading.Thread(target=_pump_output, args=(process, writer, line_buffer), daemon=True)
-    thread.start()
+    if sys.platform == "win32":
+        process = subprocess.Popen(
+            collector_cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+            close_fds=True,
+        )
+    else:
+        process = subprocess.Popen(
+            collector_cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            close_fds=True,
+        )
 
-    state.save_service(name, pid=process.pid, log_path=str(writer.current_path))
+    log_path = paths.services_dir(project_path, name) / log_filename
+    state.save_service(name, pid=process.pid, log_path=str(log_path))
     return process.pid
 
 
@@ -79,9 +69,12 @@ def stop(name: str, timeout: float = 5.0) -> bool:
 
     pid = entry["pid"]
     if sys.platform == "win32":
-        subprocess.run(["taskkill", "/PID", str(pid)], capture_output=True)
+        subprocess.run(["taskkill", "/PID", str(pid), "/T"], capture_output=True)
     else:
-        os.kill(pid, signal.SIGTERM)
+        try:
+            os.killpg(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
 
     deadline = time.time() + timeout
     while time.time() < deadline and _is_alive(pid):
@@ -89,9 +82,12 @@ def stop(name: str, timeout: float = 5.0) -> bool:
 
     if _is_alive(pid):
         if sys.platform == "win32":
-            subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
+            subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
         else:
-            os.kill(pid, signal.SIGKILL)
+            try:
+                os.killpg(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         deadline = time.time() + timeout
         while time.time() < deadline and _is_alive(pid):
             time.sleep(0.2)

@@ -81,6 +81,14 @@ def test_line_buffer_handles_split_across_feed_calls(tmp_path):
     assert content.count("[") == 1
 
 
+def test_log_writer_accepts_explicit_initial_filename(tmp_path):
+    writer = LogWriter(tmp_path, prefix="svc", max_size_mb=50, initial_filename="svc_fixed_name.log")
+    assert writer.current_path == tmp_path / "svc_fixed_name.log"
+    writer.write_line("hello")
+    writer.close()
+    assert (tmp_path / "svc_fixed_name.log").read_text(encoding="utf-8").find("hello") != -1
+
+
 def test_line_buffer_replaces_invalid_utf8(tmp_path):
     writer = LogWriter(tmp_path, prefix="session", max_size_mb=50)
     buf = LineBuffer(writer)

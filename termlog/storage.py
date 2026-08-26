@@ -1,16 +1,18 @@
+from __future__ import annotations
+
 import os
 from datetime import datetime
 from pathlib import Path
 
 
 class LogWriter:
-    def __init__(self, directory: Path, prefix: str, max_size_mb: int):
+    def __init__(self, directory: Path, prefix: str, max_size_mb: int, initial_filename: str = None):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.prefix = prefix
         self.max_size_bytes = max_size_mb * 1024 * 1024
         self._sequence = 0
-        self.current_path = self._new_path()
+        self.current_path = self.directory / initial_filename if initial_filename else self._new_path()
         self._fh = open(self.current_path, "a", encoding="utf-8", newline="")
 
     def _new_path(self) -> Path:

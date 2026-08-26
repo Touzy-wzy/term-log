@@ -1,3 +1,4 @@
+import gc
 import sys
 import time
 
@@ -48,7 +49,7 @@ def test_start_captures_output_to_log(tmp_path, monkeypatch):
 
     service_manager.start("ticker", "E:/proj")
     try:
-        time.sleep(1.0)
+        time.sleep(2.0)
         entry = state.get_service("ticker")
         content = open(entry["log_path"], encoding="utf-8", errors="replace").read()
         assert "tick" in content
@@ -65,16 +66,36 @@ def test_log_records_exit_code_when_process_finishes_on_its_own(tmp_path, monkey
     entry = state.get_service("quick")
     log_path = entry["log_path"]
 
-    deadline = time.time() + 5
+    deadline = time.time() + 8
     content = ""
     while time.time() < deadline:
-        content = open(log_path, encoding="utf-8", errors="replace").read()
+        try:
+            content = open(log_path, encoding="utf-8", errors="replace").read()
+        except FileNotFoundError:
+            content = ""
         if "service_exit" in content:
             break
         time.sleep(0.2)
 
     assert "service_exit" in content
     assert "exit_code=0" in content
+
+
+def test_service_survives_after_start_return_value_is_dropped(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    _write_config(tmp_path, [{"name": "ticker", "command": LONG_RUNNING_CMD, "cwd": str(tmp_path)}])
+
+    service_manager.start("ticker", "E:/proj")
+    gc.collect()  # drop any Popen object references this process might still hold
+
+    try:
+        time.sleep(2.0)
+        entry = state.get_service("ticker")
+        content = open(entry["log_path"], encoding="utf-8", errors="replace").read()
+        assert "tick" in content
+        assert "service_exit" not in content  # still running, hasn't finished its 50-tick loop
+    finally:
+        service_manager.stop("ticker")
 
 
 def test_stop_terminates_running_process(tmp_path, monkeypatch):
