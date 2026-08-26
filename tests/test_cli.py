@@ -60,21 +60,24 @@ def test_service_start_all_starts_every_configured_service(tmp_path, monkeypatch
 
 def test_service_stop_calls_service_manager(tmp_path, monkeypatch):
     monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
     with patch("termlog.service_manager.stop", return_value=True) as mock_stop:
         exit_code = main(["service", "stop", "my-api"])
     assert exit_code == 0
-    mock_stop.assert_called_once_with("my-api")
+    mock_stop.assert_called_once_with("my-api", str(tmp_path))
 
 
 def test_service_status_prints_table(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
     fake_status = [{"name": "my-api", "running": True, "pid": 1234, "log_path": "/tmp/my-api.log"}]
-    with patch("termlog.service_manager.status", return_value=fake_status):
+    with patch("termlog.service_manager.status", return_value=fake_status) as mock_status:
         exit_code = main(["service", "status"])
     captured = capsys.readouterr()
     assert exit_code == 0
     assert "my-api" in captured.out
     assert "1234" in captured.out
+    mock_status.assert_called_once_with(str(tmp_path))
 
 
 def test_every_invocation_runs_cleanup(tmp_path, monkeypatch):

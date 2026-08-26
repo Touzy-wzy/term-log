@@ -31,6 +31,9 @@ def start(name: str, project_path: str) -> int:
     if service is None:
         raise ValueError(f"No service named '{name}' in termlog.yaml")
 
+    if is_running(name, project_path):
+        raise ValueError(f"Service '{name}' is already running")
+
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S_%f")[:-3]
     log_filename = f"{name}_{timestamp}.log"
 
@@ -56,15 +59,15 @@ def start(name: str, project_path: str) -> int:
         )
 
     log_path = paths.services_dir(project_path, name) / log_filename
-    state.save_service(name, pid=process.pid, log_path=str(log_path))
+    state.save_service(name, pid=process.pid, log_path=str(log_path), project_path=project_path)
     return process.pid
 
 
-def stop(name: str, timeout: float = 5.0) -> bool:
-    entry = state.get_service(name)
+def stop(name: str, project_path: str, timeout: float = 5.0) -> bool:
+    entry = state.get_service(name, project_path)
     if entry is None or not _is_alive(entry["pid"]):
         if entry is not None:
-            state.remove_service(name)
+            state.remove_service(name, project_path)
         return False
 
     pid = entry["pid"]
@@ -92,21 +95,21 @@ def stop(name: str, timeout: float = 5.0) -> bool:
         while time.time() < deadline and _is_alive(pid):
             time.sleep(0.2)
 
-    state.remove_service(name)
+    state.remove_service(name, project_path)
     return True
 
 
-def is_running(name: str) -> bool:
-    entry = state.get_service(name)
+def is_running(name: str, project_path: str) -> bool:
+    entry = state.get_service(name, project_path)
     return entry is not None and _is_alive(entry["pid"])
 
 
-def status() -> List[dict]:
+def status(project_path: str) -> List[dict]:
     services = config.load_config()["services"]
     results = []
     for service in services:
         name = service["name"]
-        entry = state.get_service(name)
+        entry = state.get_service(name, project_path)
         running = entry is not None and _is_alive(entry["pid"])
         results.append(
             {

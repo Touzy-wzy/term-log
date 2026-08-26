@@ -37,10 +37,10 @@ def test_start_launches_process_and_persists_state(tmp_path, monkeypatch):
     pid = service_manager.start("ticker", "E:/proj")
     try:
         assert pid > 0
-        entry = state.get_service("ticker")
+        entry = state.get_service("ticker", "E:/proj")
         assert entry["pid"] == pid
     finally:
-        service_manager.stop("ticker")
+        service_manager.stop("ticker", "E:/proj")
 
 
 def test_start_captures_output_to_log(tmp_path, monkeypatch):
@@ -50,12 +50,12 @@ def test_start_captures_output_to_log(tmp_path, monkeypatch):
     service_manager.start("ticker", "E:/proj")
     try:
         time.sleep(2.0)
-        entry = state.get_service("ticker")
+        entry = state.get_service("ticker", "E:/proj")
         content = open(entry["log_path"], encoding="utf-8", errors="replace").read()
         assert "tick" in content
         assert "service_start" in content
     finally:
-        service_manager.stop("ticker")
+        service_manager.stop("ticker", "E:/proj")
 
 
 def test_log_records_exit_code_when_process_finishes_on_its_own(tmp_path, monkeypatch):
@@ -63,7 +63,7 @@ def test_log_records_exit_code_when_process_finishes_on_its_own(tmp_path, monkey
     _write_config(tmp_path, [{"name": "quick", "command": QUICK_CMD, "cwd": str(tmp_path)}])
 
     service_manager.start("quick", "E:/proj")
-    entry = state.get_service("quick")
+    entry = state.get_service("quick", "E:/proj")
     log_path = entry["log_path"]
 
     deadline = time.time() + 8
@@ -90,12 +90,12 @@ def test_service_survives_after_start_return_value_is_dropped(tmp_path, monkeypa
 
     try:
         time.sleep(2.0)
-        entry = state.get_service("ticker")
+        entry = state.get_service("ticker", "E:/proj")
         content = open(entry["log_path"], encoding="utf-8", errors="replace").read()
         assert "tick" in content
         assert "service_exit" not in content  # still running, hasn't finished its 50-tick loop
     finally:
-        service_manager.stop("ticker")
+        service_manager.stop("ticker", "E:/proj")
 
 
 def test_stop_terminates_running_process(tmp_path, monkeypatch):
@@ -103,15 +103,15 @@ def test_stop_terminates_running_process(tmp_path, monkeypatch):
     _write_config(tmp_path, [{"name": "ticker", "command": LONG_RUNNING_CMD, "cwd": str(tmp_path)}])
 
     service_manager.start("ticker", "E:/proj")
-    stopped = service_manager.stop("ticker")
+    stopped = service_manager.stop("ticker", "E:/proj")
 
     assert stopped is True
-    assert state.get_service("ticker") is None
+    assert state.get_service("ticker", "E:/proj") is None
 
 
 def test_stop_returns_false_when_not_running(tmp_path, monkeypatch):
     monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
-    assert service_manager.stop("never-started") is False
+    assert service_manager.stop("never-started", "E:/proj") is False
 
 
 def test_status_reports_running_and_stopped_services(tmp_path, monkeypatch):
@@ -126,8 +126,34 @@ def test_status_reports_running_and_stopped_services(tmp_path, monkeypatch):
 
     service_manager.start("ticker", "E:/proj")
     try:
-        report = {entry["name"]: entry for entry in service_manager.status()}
+        report = {entry["name"]: entry for entry in service_manager.status("E:/proj")}
         assert report["ticker"]["running"] is True
         assert report["idle"]["running"] is False
     finally:
-        service_manager.stop("ticker")
+        service_manager.stop("ticker", "E:/proj")
+
+
+def test_start_raises_when_service_already_running(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    _write_config(tmp_path, [{"name": "ticker", "command": LONG_RUNNING_CMD, "cwd": str(tmp_path)}])
+
+    service_manager.start("ticker", "E:/proj")
+    try:
+        with pytest.raises(ValueError):
+            service_manager.start("ticker", "E:/proj")
+    finally:
+        service_manager.stop("ticker", "E:/proj")
+
+
+def test_start_succeeds_again_after_stop(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    _write_config(tmp_path, [{"name": "ticker", "command": LONG_RUNNING_CMD, "cwd": str(tmp_path)}])
+
+    service_manager.start("ticker", "E:/proj")
+    service_manager.stop("ticker", "E:/proj")
+
+    pid = service_manager.start("ticker", "E:/proj")
+    try:
+        assert pid > 0
+    finally:
+        service_manager.stop("ticker", "E:/proj")

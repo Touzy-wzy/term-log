@@ -51,13 +51,13 @@ def _cmd_service_start(args) -> int:
 
 
 def _cmd_service_stop(args) -> int:
-    stopped = service_manager.stop(args.name)
+    stopped = service_manager.stop(args.name, os.getcwd())
     print(f"stopped {args.name}" if stopped else f"{args.name} was not running")
     return 0
 
 
 def _cmd_service_status(args) -> int:
-    for entry in service_manager.status():
+    for entry in service_manager.status(os.getcwd()):
         state = f"running (pid {entry['pid']})" if entry["running"] else "stopped"
         print(f"{entry['name']}: {state}")
         if entry["log_path"]:
@@ -67,7 +67,7 @@ def _cmd_service_status(args) -> int:
 
 def _cmd_service_logs(args) -> int:
     entry = None
-    for candidate in service_manager.status():
+    for candidate in service_manager.status(os.getcwd()):
         if candidate["name"] == args.name:
             entry = candidate
             break
