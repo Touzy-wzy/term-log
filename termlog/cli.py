@@ -2,7 +2,7 @@ import argparse
 import os
 import sys
 
-from termlog import cleanup, hook_targets, service_manager
+from termlog import cleanup, config, hook_targets, service_manager
 
 
 def _cmd_hook_install(args) -> int:
@@ -27,6 +27,20 @@ def _cmd_hook_status(args) -> int:
 
 
 def _cmd_service_start(args) -> int:
+    if args.all:
+        services = config.load_config()["services"]
+        exit_code = 0
+        for service in services:
+            service_name = service["name"]
+            try:
+                pid = service_manager.start(service_name, os.getcwd())
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                exit_code = 1
+                continue
+            print(f"started {service_name} (pid {pid})")
+        return exit_code
+
     try:
         pid = service_manager.start(args.name, os.getcwd())
     except ValueError as exc:
@@ -89,7 +103,9 @@ def build_parser() -> argparse.ArgumentParser:
     service_sub = service_parser.add_subparsers(dest="action", required=True)
 
     start_parser = service_sub.add_parser("start")
-    start_parser.add_argument("name")
+    start_group = start_parser.add_mutually_exclusive_group(required=True)
+    start_group.add_argument("name", nargs="?")
+    start_group.add_argument("--all", action="store_true")
     start_parser.set_defaults(func=_cmd_service_start)
 
     stop_parser = service_sub.add_parser("stop")

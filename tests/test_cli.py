@@ -40,6 +40,24 @@ def test_service_start_reports_unknown_service(tmp_path, monkeypatch, capsys):
     assert "missing" in captured.err
 
 
+def test_service_start_all_starts_every_configured_service(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    fake_config = {
+        "retention_days": 14,
+        "max_log_size_mb": 50,
+        "services": [{"name": "my-api"}, {"name": "my-worker"}],
+    }
+    with patch("termlog.config.load_config", return_value=fake_config), patch(
+        "termlog.service_manager.start", side_effect=[1234, 5678]
+    ) as mock_start:
+        exit_code = main(["service", "start", "--all"])
+    assert exit_code == 0
+    assert mock_start.call_count == 2
+    mock_start.assert_any_call("my-api", str(tmp_path))
+    mock_start.assert_any_call("my-worker", str(tmp_path))
+
+
 def test_service_stop_calls_service_manager(tmp_path, monkeypatch):
     monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
     with patch("termlog.service_manager.stop", return_value=True) as mock_stop:
