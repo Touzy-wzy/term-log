@@ -87,3 +87,41 @@ def test_every_invocation_runs_cleanup(tmp_path, monkeypatch):
     ):
         main(["hook", "status"])
     assert mock_cleanup.called
+
+
+def test_log_view_prints_ansi_stripped_content(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    log_file = tmp_path / "session.log"
+    log_file.write_text("\x1b[93mhello\x1b[m world\n", encoding="utf-8")
+
+    exit_code = main(["log", "view", str(log_file)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out == "hello world\n"
+    assert "\x1b" not in captured.out
+
+
+def test_log_view_writes_to_out_file_when_given(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    log_file = tmp_path / "session.log"
+    log_file.write_text("\x1b[93mhello\x1b[m world\n", encoding="utf-8")
+    out_file = tmp_path / "session.clean.log"
+
+    exit_code = main(["log", "view", str(log_file), "--out", str(out_file)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert out_file.read_text(encoding="utf-8") == "hello world\n"
+    assert str(out_file) in captured.out
+
+
+def test_log_view_reports_missing_file(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    missing = tmp_path / "does_not_exist.log"
+
+    exit_code = main(["log", "view", str(missing)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "could not read" in captured.err

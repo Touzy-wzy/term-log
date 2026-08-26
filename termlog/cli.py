@@ -2,7 +2,7 @@ import argparse
 import os
 import sys
 
-from termlog import cleanup, config, hook_targets, service_manager
+from termlog import ansi, cleanup, config, hook_targets, service_manager
 
 
 def _cmd_hook_install(args) -> int:
@@ -89,6 +89,25 @@ def _cmd_service_logs(args) -> int:
                 time.sleep(0.5)
 
 
+def _cmd_log_view(args) -> int:
+    try:
+        with open(args.path, "r", encoding="utf-8", errors="replace") as f:
+            raw = f.read()
+    except OSError as exc:
+        print(f"could not read {args.path}: {exc}", file=sys.stderr)
+        return 1
+
+    cleaned = ansi.strip_ansi(raw)
+
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            f.write(cleaned)
+        print(f"wrote plain-text log to {args.out}")
+    else:
+        print(cleaned, end="")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="termlog")
     subparsers = parser.add_subparsers(dest="topic", required=True)
@@ -118,6 +137,14 @@ def build_parser() -> argparse.ArgumentParser:
     logs_parser.add_argument("name")
     logs_parser.add_argument("-f", "--follow", action="store_true")
     logs_parser.set_defaults(func=_cmd_service_logs)
+
+    log_parser = subparsers.add_parser("log")
+    log_sub = log_parser.add_subparsers(dest="action", required=True)
+
+    view_parser = log_sub.add_parser("view")
+    view_parser.add_argument("path")
+    view_parser.add_argument("--out")
+    view_parser.set_defaults(func=_cmd_log_view)
 
     return parser
 
