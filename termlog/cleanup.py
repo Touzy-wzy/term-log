@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import time
 from pathlib import Path
 
 from termlog import config, paths
 
 
-def run_cleanup(retention_days: int | None = None) -> list:
+def run_cleanup(retention_days: int | None = None) -> list[Path]:
     if retention_days is None:
         retention_days = config.load_config()["retention_days"]
 
