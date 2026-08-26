@@ -48,3 +48,18 @@ def test_uses_configured_retention_when_not_specified(tmp_path, monkeypatch):
 def test_returns_empty_list_when_logs_dir_missing(tmp_path, monkeypatch):
     monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
     assert cleanup.run_cleanup(retention_days=14) == []
+
+
+def test_skips_locked_file_without_raising(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    locked_file = paths.sessions_dir("E:/proj") / "locked.log"
+    _touch_old(locked_file, days_old=20)
+
+    handle = open(locked_file, "a")
+    try:
+        deleted = cleanup.run_cleanup(retention_days=14)
+    finally:
+        handle.close()
+
+    assert locked_file not in deleted
+    assert locked_file.exists()

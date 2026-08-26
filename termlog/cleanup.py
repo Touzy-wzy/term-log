@@ -18,6 +18,9 @@ def run_cleanup(retention_days: int | None = None) -> list[Path]:
     deleted = []
     for log_file in logs_root.rglob("*.log"):
         if log_file.stat().st_mtime < cutoff:
-            log_file.unlink()
+            try:
+                log_file.unlink()
+            except OSError:
+                continue
             deleted.append(log_file)
     return deleted
