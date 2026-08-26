@@ -24,6 +24,13 @@ def _targets():
             "marker_start": hooks.POWERSHELL_MARKER_START,
             "marker_end": hooks.POWERSHELL_MARKER_END,
         },
+        {
+            "shell": "powershell7",
+            "path": home / "Documents" / "PowerShell" / "Microsoft.PowerShell_profile.ps1",
+            "snippet": hooks.powershell_snippet(),
+            "marker_start": hooks.POWERSHELL_MARKER_START,
+            "marker_end": hooks.POWERSHELL_MARKER_END,
+        },
     ]
 
 

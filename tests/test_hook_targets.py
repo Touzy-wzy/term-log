@@ -7,6 +7,14 @@ def test_discover_targets_includes_bash_and_powershell(monkeypatch, tmp_path):
     shells = {t["shell"] for t in targets}
     assert "bash" in shells
     assert "powershell" in shells
+    assert len(targets) == 3
+
+
+def test_discover_targets_includes_powershell7_profile_path(monkeypatch, tmp_path):
+    monkeypatch.setattr(hook_targets, "_home", lambda: tmp_path)
+    targets = hook_targets.discover_targets()
+    pwsh7 = [t for t in targets if t["path"] == tmp_path / "Documents" / "PowerShell" / "Microsoft.PowerShell_profile.ps1"]
+    assert len(pwsh7) == 1
 
 
 def test_install_all_creates_missing_files(monkeypatch, tmp_path):
