@@ -1,25 +1,23 @@
 import os
-import time
 from datetime import datetime
 from pathlib import Path
 
 
 class LogWriter:
-    _sequence = 0
-
     def __init__(self, directory: Path, prefix: str, max_size_mb: int):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.prefix = prefix
         self.max_size_bytes = max_size_mb * 1024 * 1024
+        self._sequence = 0
         self.current_path = self._new_path()
         self._fh = open(self.current_path, "a", encoding="utf-8", newline="")
 
     def _new_path(self) -> Path:
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S.%f")[:-3]
         pid = os.getpid()
-        LogWriter._sequence += 1
-        name = f"{self.prefix}_{timestamp}_pid{pid}_{LogWriter._sequence}.log"
+        self._sequence += 1
+        name = f"{self.prefix}_{timestamp}_pid{pid}_{self._sequence}.log"
         return self.directory / name
 
     def _rotate_if_needed(self, incoming_bytes: int) -> None:
