@@ -1,0 +1,21 @@
+[project]
+name = "termlog"
+version = "0.1.0"
+description = "Automatic terminal session and service log capture for local development"
+requires-python = ">=3.9"
+dependencies = [
+    "PyYAML==6.0.2",
+]
+
+[project.optional-dependencies]
+windows = ["pywinpty==2.0.13"]
+
+[project.scripts]
+termlog = "termlog.cli:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
