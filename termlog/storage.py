@@ -41,3 +41,20 @@ class LogWriter:
     def close(self) -> None:
         if not self._fh.closed:
             self._fh.close()
+
+
+class LineBuffer:
+    def __init__(self, writer: "LogWriter"):
+        self.writer = writer
+        self._buffer = b""
+
+    def feed(self, data: bytes) -> None:
+        self._buffer += data
+        while b"\n" in self._buffer:
+            line, self._buffer = self._buffer.split(b"\n", 1)
+            self.writer.write_line(line.decode("utf-8", errors="replace"))
+
+    def flush(self) -> None:
+        if self._buffer:
+            self.writer.write_line(self._buffer.decode("utf-8", errors="replace"))
+            self._buffer = b""

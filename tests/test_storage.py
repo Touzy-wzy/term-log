@@ -1,6 +1,6 @@
 import time
 
-from termlog.storage import LogWriter
+from termlog.storage import LineBuffer, LogWriter
 
 
 def test_write_line_creates_file_with_timestamp_prefix(tmp_path):
@@ -45,3 +45,47 @@ def test_filenames_are_sorted_by_creation_order(tmp_path):
     files = sorted(tmp_path.glob("session_*.log"))
     assert len(files) == 2
     assert files[0].read_text(encoding="utf-8").find("first") != -1
+
+
+def test_line_buffer_emits_complete_lines(tmp_path):
+    writer = LogWriter(tmp_path, prefix="session", max_size_mb=50)
+    buf = LineBuffer(writer)
+    buf.feed(b"hello\nworld\n")
+    writer.close()
+    content = writer.current_path.read_text(encoding="utf-8")
+    assert "hello" in content
+    assert "world" in content
+    assert content.count("[") == 2
+
+
+def test_line_buffer_holds_partial_line_until_flush(tmp_path):
+    writer = LogWriter(tmp_path, prefix="session", max_size_mb=50)
+    buf = LineBuffer(writer)
+    buf.feed(b"progress: 50%")
+    content_before = writer.current_path.read_text(encoding="utf-8")
+    assert content_before == ""
+    buf.flush()
+    writer.close()
+    content_after = writer.current_path.read_text(encoding="utf-8")
+    assert "progress: 50%" in content_after
+
+
+def test_line_buffer_handles_split_across_feed_calls(tmp_path):
+    writer = LogWriter(tmp_path, prefix="session", max_size_mb=50)
+    buf = LineBuffer(writer)
+    buf.feed(b"hel")
+    buf.feed(b"lo\n")
+    writer.close()
+    content = writer.current_path.read_text(encoding="utf-8")
+    assert "hello" in content
+    assert content.count("[") == 1
+
+
+def test_line_buffer_replaces_invalid_utf8(tmp_path):
+    writer = LogWriter(tmp_path, prefix="session", max_size_mb=50)
+    buf = LineBuffer(writer)
+    buf.feed(b"valid \xff\xfe bytes\n")
+    writer.close()
+    content = writer.current_path.read_text(encoding="utf-8")
+    assert "valid" in content
+    assert "bytes" in content
