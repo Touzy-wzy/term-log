@@ -6,6 +6,7 @@ import pytest
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows console API only")
 
 from termlog.recorder.windows_console import (
+    DEFAULT_DIMENSIONS,
     ENABLE_ECHO_INPUT,
     ENABLE_LINE_INPUT,
     ENABLE_PROCESSED_INPUT,
@@ -13,6 +14,7 @@ from termlog.recorder.windows_console import (
     RAW_FORWARDING_MODE,
     WAIT_OBJECT_0,
     RawInputMode,
+    get_console_dimensions,
 )
 
 
@@ -122,3 +124,53 @@ def test_read_decodes_the_console_buffer_up_to_chars_read():
 
         with RawInputMode() as console_input:
             assert console_input.read(max_chars=10) == "ab"
+
+
+def test_get_console_dimensions_falls_back_when_get_std_handle_fails():
+    # Regression test: the root cause of arrow-key/tab-completion redraw
+    # corruption — PtyProcess.spawn() defaulted to a fixed 80x24 pty
+    # regardless of the real console's actual size, so the captured child
+    # shell computed cursor positions against the wrong dimensions. This
+    # confirms the fallback used when there's no real console at all
+    # (e.g. under this test harness) matches pywinpty's own (24, 80)
+    # default rather than returning something nonsensical.
+    with patch("termlog.recorder.windows_console.kernel32") as mock_kernel32:
+        mock_kernel32.GetStdHandle.return_value = 0
+        assert get_console_dimensions() == DEFAULT_DIMENSIONS
+
+
+def test_get_console_dimensions_falls_back_when_buffer_info_query_fails():
+    with patch("termlog.recorder.windows_console.kernel32") as mock_kernel32:
+        mock_kernel32.GetStdHandle.return_value = 123
+        mock_kernel32.GetConsoleScreenBufferInfo.return_value = False
+        assert get_console_dimensions() == DEFAULT_DIMENSIONS
+
+
+def test_get_console_dimensions_returns_rows_cols_from_window_rect():
+    with patch("termlog.recorder.windows_console.kernel32") as mock_kernel32:
+        mock_kernel32.GetStdHandle.return_value = 123
+
+        def fake_get_buffer_info(handle, info_ptr):
+            info_ptr._obj.srWindow.Left = 0
+            info_ptr._obj.srWindow.Right = 119  # 120 columns (0-indexed inclusive)
+            info_ptr._obj.srWindow.Top = 0
+            info_ptr._obj.srWindow.Bottom = 29  # 30 rows
+            return True
+
+        mock_kernel32.GetConsoleScreenBufferInfo.side_effect = fake_get_buffer_info
+        assert get_console_dimensions() == (30, 120)
+
+
+def test_get_console_dimensions_falls_back_on_degenerate_size():
+    with patch("termlog.recorder.windows_console.kernel32") as mock_kernel32:
+        mock_kernel32.GetStdHandle.return_value = 123
+
+        def fake_get_buffer_info(handle, info_ptr):
+            info_ptr._obj.srWindow.Left = 0
+            info_ptr._obj.srWindow.Right = -1  # 0 columns — degenerate
+            info_ptr._obj.srWindow.Top = 0
+            info_ptr._obj.srWindow.Bottom = 29
+            return True
+
+        mock_kernel32.GetConsoleScreenBufferInfo.side_effect = fake_get_buffer_info
+        assert get_console_dimensions() == DEFAULT_DIMENSIONS

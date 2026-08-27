@@ -64,6 +64,66 @@ kernel32.ReadConsoleW.argtypes = [
     wintypes.LPVOID,
 ]
 
+STD_OUTPUT_HANDLE = -11
+DEFAULT_DIMENSIONS = (24, 80)  # (rows, cols) — pywinpty's own fallback default
+
+
+class _COORD(ctypes.Structure):
+    _fields_ = [("X", ctypes.c_short), ("Y", ctypes.c_short)]
+
+
+class _SMALL_RECT(ctypes.Structure):
+    _fields_ = [
+        ("Left", ctypes.c_short),
+        ("Top", ctypes.c_short),
+        ("Right", ctypes.c_short),
+        ("Bottom", ctypes.c_short),
+    ]
+
+
+class _CONSOLE_SCREEN_BUFFER_INFO(ctypes.Structure):
+    _fields_ = [
+        ("dwSize", _COORD),
+        ("dwCursorPosition", _COORD),
+        ("wAttributes", ctypes.c_ushort),
+        ("srWindow", _SMALL_RECT),
+        ("dwMaximumWindowSize", _COORD),
+    ]
+
+
+kernel32.GetConsoleScreenBufferInfo.restype = wintypes.BOOL
+kernel32.GetConsoleScreenBufferInfo.argtypes = [
+    wintypes.HANDLE,
+    ctypes.POINTER(_CONSOLE_SCREEN_BUFFER_INFO),
+]
+
+
+def get_console_dimensions():
+    """Return the real console window's (rows, cols), or the same
+    (24, 80) fallback pywinpty itself defaults to when there is no real
+    console attached (e.g. under a test harness).
+
+    Passing the wrong size to the captured child shell doesn't produce an
+    error — it silently makes the child miscompute where to move the
+    cursor for things like arrow-key history recall or tab completion,
+    since those redraw by moving the cursor to an absolute row/column
+    that only lines up with what actually appears on screen if the child
+    agrees with the real terminal about how big the screen is.
+    """
+    handle = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+    if not handle or handle == INVALID_HANDLE_VALUE:
+        return DEFAULT_DIMENSIONS
+
+    info = _CONSOLE_SCREEN_BUFFER_INFO()
+    if not kernel32.GetConsoleScreenBufferInfo(handle, ctypes.byref(info)):
+        return DEFAULT_DIMENSIONS
+
+    cols = info.srWindow.Right - info.srWindow.Left + 1
+    rows = info.srWindow.Bottom - info.srWindow.Top + 1
+    if cols <= 0 or rows <= 0:
+        return DEFAULT_DIMENSIONS
+    return (rows, cols)
+
 
 class RawInputMode:
     """Context manager that puts the real console stdin into raw,

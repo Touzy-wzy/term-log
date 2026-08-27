@@ -2,12 +2,19 @@ import socket
 
 from winpty import PtyProcess
 
-from termlog.recorder.windows_console import RawInputMode
+from termlog.recorder.windows_console import RawInputMode, get_console_dimensions
 from termlog.storage import LineBuffer
 
 
 def run(command: list, session) -> int:
-    process = PtyProcess.spawn(command)
+    # PtyProcess.spawn defaults to a fixed 80x24 pty when no dimensions
+    # are given, regardless of the real console's actual size. The
+    # captured child shell then computes cursor positions for things like
+    # arrow-key history redraw or tab completion against that wrong size,
+    # producing garbled/misplaced output whenever the real window is a
+    # different size (almost always, since 80x24 is rarely anyone's
+    # actual terminal size).
+    process = PtyProcess.spawn(command, dimensions=get_console_dimensions())
     # process.read() blocks on the underlying socket with no timeout, so a
     # child that stops producing output (but hasn't yet been reaped as dead)
     # can hang the loop forever. Give the socket a short timeout so read()
