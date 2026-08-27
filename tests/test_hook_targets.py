@@ -20,6 +20,7 @@ def test_discover_targets_includes_powershell7_profile_path(monkeypatch, tmp_pat
 
 
 def test_install_all_creates_missing_files(monkeypatch, tmp_path):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path / "termlog_home"))
     monkeypatch.setattr(hook_targets, "_home", lambda: tmp_path)
     results = hook_targets.install_all()
     for result in results:
@@ -34,6 +35,7 @@ def test_install_all_embeds_the_running_interpreters_absolute_path(monkeypatch, 
     # bare "python" resolved from whatever PATH a future shell happens to
     # have. A bare "python" previously caused every newly opened terminal to
     # fail outright whenever its default python lacked termlog.
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path / "termlog_home"))
     monkeypatch.setattr(hook_targets, "_home", lambda: tmp_path)
     results = hook_targets.install_all()
     for result in results:
@@ -44,6 +46,7 @@ def test_install_all_embeds_the_running_interpreters_absolute_path(monkeypatch, 
 
 
 def test_install_all_is_idempotent(monkeypatch, tmp_path):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path / "termlog_home"))
     monkeypatch.setattr(hook_targets, "_home", lambda: tmp_path)
     hook_targets.install_all()
     second = hook_targets.install_all()
@@ -51,6 +54,7 @@ def test_install_all_is_idempotent(monkeypatch, tmp_path):
 
 
 def test_status_reflects_installed_state(monkeypatch, tmp_path):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path / "termlog_home"))
     monkeypatch.setattr(hook_targets, "_home", lambda: tmp_path)
     before = hook_targets.status()
     assert all(result["hook_present"] is False for result in before)
@@ -60,9 +64,29 @@ def test_status_reflects_installed_state(monkeypatch, tmp_path):
 
 
 def test_uninstall_all_removes_hook(monkeypatch, tmp_path):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path / "termlog_home"))
     monkeypatch.setattr(hook_targets, "_home", lambda: tmp_path)
     hook_targets.install_all()
     results = hook_targets.uninstall_all()
     assert all(result["removed"] is True for result in results)
     after = hook_targets.status()
     assert all(result["hook_present"] is False for result in after)
+
+
+def test_install_all_marks_hook_installed_timestamp(monkeypatch, tmp_path):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path / "termlog_home"))
+    monkeypatch.setattr(hook_targets, "_home", lambda: tmp_path)
+    from termlog import state
+
+    hook_targets.install_all()
+    assert state.get_hook_installed_at() is not None
+
+
+def test_uninstall_all_clears_hook_installed_timestamp(monkeypatch, tmp_path):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path / "termlog_home"))
+    monkeypatch.setattr(hook_targets, "_home", lambda: tmp_path)
+    from termlog import state
+
+    hook_targets.install_all()
+    hook_targets.uninstall_all()
+    assert state.get_hook_installed_at() is None

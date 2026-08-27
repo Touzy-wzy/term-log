@@ -61,3 +61,29 @@ def test_save_then_load_round_trip_still_works(tmp_path, monkeypatch):
     loaded = state.load_state()
     assert loaded["E:/proj::roundtrip"]["pid"] == 42
     assert loaded["E:/proj::roundtrip"]["log_path"] == "/x.log"
+
+
+def test_get_hook_installed_at_returns_none_when_never_marked(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    assert state.get_hook_installed_at() is None
+
+
+def test_mark_hook_installed_records_timestamp(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    state.mark_hook_installed()
+    assert state.get_hook_installed_at() is not None
+
+
+def test_mark_hook_installed_does_not_reset_existing_timestamp(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    state.mark_hook_installed()
+    first = state.get_hook_installed_at()
+    state.mark_hook_installed()
+    assert state.get_hook_installed_at() == first
+
+
+def test_clear_hook_installed_at_removes_timestamp(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    state.mark_hook_installed()
+    state.clear_hook_installed_at()
+    assert state.get_hook_installed_at() is None

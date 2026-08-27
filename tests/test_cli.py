@@ -11,6 +11,19 @@ def test_hook_install_calls_install_all(tmp_path, monkeypatch):
     assert mock_install.called
 
 
+def test_hook_uninstall_exports_logs_before_uninstalling(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    with patch("termlog.log_export.export_session_logs", return_value=[tmp_path / "a.log"]) as mock_export, patch(
+        "termlog.hook_targets.uninstall_all", return_value=[]
+    ) as mock_uninstall:
+        exit_code = main(["hook", "uninstall"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert mock_export.called
+    assert mock_uninstall.called
+    assert "exported 1" in captured.out
+
+
 def test_hook_status_calls_status(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
     fake_result = [{"shell": "bash", "path": tmp_path / ".bashrc", "hook_present": True}]

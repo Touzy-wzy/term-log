@@ -2,7 +2,7 @@ import argparse
 import os
 import sys
 
-from termlog import ansi, cleanup, config, hook_targets, service_manager
+from termlog import ansi, cleanup, config, hook_targets, log_export, service_manager
 
 
 def _cmd_hook_install(args) -> int:
@@ -13,6 +13,9 @@ def _cmd_hook_install(args) -> int:
 
 
 def _cmd_hook_uninstall(args) -> int:
+    exported = log_export.export_session_logs()
+    if exported:
+        print(f"exported {len(exported)} plain-text log(s) to sessions_view/services_view")
     for result in hook_targets.uninstall_all():
         state = "removed" if result["removed"] else "not present"
         print(f"{result['shell']}: {state} ({result['path']})")

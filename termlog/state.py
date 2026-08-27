@@ -49,3 +49,21 @@ def remove_service(name: str, project_path: str) -> None:
     if key in data:
         del data[key]
         _save_state(data)
+
+
+def get_hook_installed_at():
+    return load_state().get("hook_installed_at")
+
+
+def mark_hook_installed() -> None:
+    data = load_state()
+    if "hook_installed_at" not in data:
+        data["hook_installed_at"] = datetime.now().isoformat()
+        _save_state(data)
+
+
+def clear_hook_installed_at() -> None:
+    data = load_state()
+    if "hook_installed_at" in data:
+        del data["hook_installed_at"]
+        _save_state(data)

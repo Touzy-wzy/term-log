@@ -3,7 +3,7 @@ import yaml
 from termlog import paths
 
 DEFAULTS = {
-    "retention_days": 14,
+    "retention_days": 60,
     "max_log_size_mb": 50,
     "services": [],
 }

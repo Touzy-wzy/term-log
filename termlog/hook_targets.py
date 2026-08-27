@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from termlog import hooks
+from termlog import hooks, state
 
 
 def _home() -> Path:
@@ -58,6 +58,7 @@ def install_all() -> list:
     for t in _targets():
         installed = hooks.install_snippet(t["path"], t["snippet"], t["marker_start"], t["marker_end"])
         results.append({"shell": t["shell"], "path": t["path"], "installed": installed})
+    state.mark_hook_installed()
     return results
 
 
@@ -66,6 +67,7 @@ def uninstall_all() -> list:
     for t in _targets():
         removed = hooks.uninstall_snippet(t["path"], t["marker_start"], t["marker_end"])
         results.append({"shell": t["shell"], "path": t["path"], "removed": removed})
+    state.clear_hook_installed_at()
     return results
 
 
