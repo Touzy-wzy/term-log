@@ -1,9 +1,21 @@
 import socket
+import time
 
 from winpty import PtyProcess
 
 from termlog.recorder.windows_console import RawInputMode, get_console_dimensions
 from termlog.storage import LineBuffer
+
+# How often to re-check the real console's size against what the captured
+# child shell currently thinks it is. The captured shell computes cursor
+# positions for redraws (arrow-key history recall, tab completion) against
+# whatever size it was last told — if the user resizes the terminal window
+# mid-session and this never gets checked again, redraws go right back to
+# being garbled/misplaced, just like the original fixed-80x24 bug this
+# polling closes the other half of. A half-second interval is frequent
+# enough that a resize is picked up quickly without meaningfully adding to
+# this loop's per-iteration cost.
+RESIZE_CHECK_INTERVAL_SECONDS = 0.5
 
 
 def run(command: list, session) -> int:
@@ -14,7 +26,8 @@ def run(command: list, session) -> int:
     # producing garbled/misplaced output whenever the real window is a
     # different size (almost always, since 80x24 is rarely anyone's
     # actual terminal size).
-    process = PtyProcess.spawn(command, dimensions=get_console_dimensions())
+    current_dimensions = get_console_dimensions()
+    process = PtyProcess.spawn(command, dimensions=current_dimensions)
     # process.read() blocks on the underlying socket with no timeout, so a
     # child that stops producing output (but hasn't yet been reaped as dead)
     # can hang the loop forever. Give the socket a short timeout so read()
@@ -34,7 +47,17 @@ def run(command: list, session) -> int:
     try:
         with RawInputMode() as console_input:
             dead_streak = 0
+            next_resize_check = time.monotonic() + RESIZE_CHECK_INTERVAL_SECONDS
             while True:
+                now = time.monotonic()
+                if now >= next_resize_check:
+                    next_resize_check = now + RESIZE_CHECK_INTERVAL_SECONDS
+                    latest_dimensions = get_console_dimensions()
+                    if latest_dimensions != current_dimensions:
+                        current_dimensions = latest_dimensions
+                        rows, cols = current_dimensions
+                        process.setwinsize(rows, cols)
+
                 # Forward any pending keystrokes first. This is a separate
                 # check from the output read below — an earlier version
                 # used `continue` on the output read's timeout, which
