@@ -88,6 +88,14 @@ def remove_active_session(pid: int) -> None:
         _save_state(data)
 
 
+def _last_activity_at(log_path: str):
+    try:
+        mtime = os.path.getmtime(log_path)
+    except OSError:
+        return None
+    return datetime.fromtimestamp(mtime).isoformat()
+
+
 def list_active_sessions() -> list:
     data = load_state()
     sessions = data.get("active_sessions", {})
@@ -102,6 +110,7 @@ def list_active_sessions() -> list:
                     "project_path": entry["project_path"],
                     "log_path": entry["log_path"],
                     "started_at": entry["started_at"],
+                    "last_activity_at": _last_activity_at(entry["log_path"]),
                 }
             )
         else:

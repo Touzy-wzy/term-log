@@ -149,7 +149,13 @@ def test_hook_status_json_includes_shells_active_sessions_and_limitations(tmp_pa
     ), patch(
         "termlog.state.list_active_sessions",
         return_value=[
-            {"pid": 1234, "project_path": "E:/proj", "log_path": "/tmp/session.log", "started_at": "2026-01-01T00:00:00"}
+            {
+                "pid": 1234,
+                "project_path": "E:/proj",
+                "log_path": "/tmp/session.log",
+                "started_at": "2026-01-01T00:00:00",
+                "last_activity_at": "2026-01-01T00:05:00",
+            }
         ],
     ):
         exit_code = main(["hook", "status", "--json"])
@@ -161,7 +167,33 @@ def test_hook_status_json_includes_shells_active_sessions_and_limitations(tmp_pa
     assert payload["installed_at"] == "2026-01-01T00:00:00"
     assert payload["shells"][0]["shell"] == "bash"
     assert payload["active_sessions"][0]["pid"] == 1234
+    assert payload["active_sessions"][0]["last_activity_at"] == "2026-01-01T00:05:00"
     assert len(payload["limitations"]) > 0
+
+
+def test_log_view_tail_only_shows_last_n_lines(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    log_file = tmp_path / "session.log"
+    log_file.write_text("line1\nline2\nline3\nline4\n", encoding="utf-8")
+
+    exit_code = main(["log", "view", str(log_file), "--tail", "2"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out == "line3\nline4\n"
+    assert "line1" not in captured.out
+
+
+def test_log_view_tail_strips_ansi(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    log_file = tmp_path / "session.log"
+    log_file.write_text("line1\n\x1b[93mline2\x1b[m\n", encoding="utf-8")
+
+    exit_code = main(["log", "view", str(log_file), "--tail", "1"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out == "line2\n"
 
 
 def test_log_view_follow_strips_ansi_from_new_lines(tmp_path, monkeypatch, capsys):

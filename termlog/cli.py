@@ -51,6 +51,7 @@ def _cmd_hook_status(args) -> int:
                     "project_path": s["project_path"],
                     "log_path": s["log_path"],
                     "started_at": s["started_at"],
+                    "last_activity_at": s.get("last_activity_at"),
                 }
                 for s in state.list_active_sessions()
             ],
@@ -135,6 +136,17 @@ def _cmd_log_view(args) -> int:
         return 1
 
     with f:
+        if args.tail:
+            lines = f.readlines()[-args.tail:]
+            cleaned = ansi.strip_ansi("".join(lines))
+            if args.out:
+                with open(args.out, "w", encoding="utf-8") as out:
+                    out.write(cleaned)
+                print(f"wrote plain-text log to {args.out}")
+            else:
+                print(cleaned, end="")
+            return 0
+
         if args.follow:
             out = open(args.out, "w", encoding="utf-8") if args.out else None
             try:
@@ -240,6 +252,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--follow",
         action="store_true",
         help="keep streaming cleaned text as the log grows (for a session still recording)",
+    )
+    view_parser.add_argument(
+        "--tail",
+        type=int,
+        metavar="N",
+        help="only show the last N lines (use this instead of a full read when "
+        "looking for a recent error, to avoid pulling an entire large log into context)",
     )
     view_parser.set_defaults(func=_cmd_log_view)
 

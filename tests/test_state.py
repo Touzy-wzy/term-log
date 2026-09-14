@@ -118,3 +118,24 @@ def test_list_active_sessions_prunes_dead_pids(tmp_path, monkeypatch):
     # The stale entry should also have been pruned from the underlying state.
     data = state.load_state()
     assert str(dead_pid) not in data.get("active_sessions", {})
+
+
+def test_list_active_sessions_includes_last_activity_from_log_mtime(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    log_file = tmp_path / "session.log"
+    log_file.write_text("hello\n", encoding="utf-8")
+    state.save_active_session(pid=os.getpid(), log_path=str(log_file), project_path="E:/proj")
+
+    sessions = state.list_active_sessions()
+
+    assert len(sessions) == 1
+    assert sessions[0]["last_activity_at"] is not None
+
+
+def test_list_active_sessions_last_activity_is_none_when_log_missing(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    state.save_active_session(pid=os.getpid(), log_path="/tmp/does_not_exist.log", project_path="E:/proj")
+
+    sessions = state.list_active_sessions()
+
+    assert sessions[0]["last_activity_at"] is None
