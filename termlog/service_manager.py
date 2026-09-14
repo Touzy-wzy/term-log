@@ -9,21 +9,7 @@ from datetime import datetime
 from typing import List
 
 from termlog import config, paths, state
-
-
-def _is_alive(pid: int) -> bool:
-    if sys.platform == "win32":
-        result = subprocess.run(
-            ["tasklist", "/FI", f"PID eq {pid}"],
-            capture_output=True,
-            text=True,
-        )
-        return str(pid) in result.stdout
-    try:
-        os.kill(pid, 0)
-        return True
-    except (OSError, ProcessLookupError):
-        return False
+from termlog.state import _is_alive
 
 
 def start(name: str, project_path: str) -> int:

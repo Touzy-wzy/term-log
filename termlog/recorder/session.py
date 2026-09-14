@@ -1,7 +1,7 @@
 import os
 import sys
 
-from termlog import paths
+from termlog import paths, state
 from termlog.storage import LogWriter
 
 
@@ -29,10 +29,16 @@ class RecordedSession:
 
     def start(self, shell_name: str) -> None:
         self.writer.write_meta("session_start", project=self.project_path, shell=shell_name)
+        state.save_active_session(
+            pid=os.getpid(),
+            log_path=str(self.writer.current_path),
+            project_path=self.project_path,
+        )
 
     def end(self, exit_code: int) -> None:
         self.writer.write_meta("session_end", exit_code=exit_code)
         self.writer.close()
+        state.remove_active_session(pid=os.getpid())
 
 
 def _max_log_size_mb() -> int:

@@ -45,8 +45,22 @@ def test_strips_trailing_truncated_escape_sequence():
     assert strip_ansi("hello\x1b[") == "hello"
 
 
-def test_strips_backspace_and_bell_control_bytes():
-    assert strip_ansi("a\x08b\x07c") == "abc"
+def test_backspace_erases_preceding_character():
+    # \x08 means "delete the character before me" (how a terminal renders
+    # a retyped command line), not "delete yourself and leave neighbors
+    # alone" — the bell (\x07) is still dropped as inaudible noise.
+    assert strip_ansi("a\x08b\x07c") == "bc"
+
+
+def test_backspace_with_nothing_before_it_is_a_no_op():
+    assert strip_ansi("\x08abc") == "abc"
+
+
+def test_retyped_command_reduces_to_final_text():
+    # Drawn from a real captured session: the user typed "l", backspaced,
+    # then typed "ls". Naive control-byte stripping used to render this as
+    # "lls" instead of the command that was actually run.
+    assert strip_ansi("l\x08ls") == "ls"
 
 
 def test_real_captured_terminal_output_becomes_clean_text():

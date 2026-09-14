@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 from termlog.cli import main
@@ -138,3 +139,50 @@ def test_log_view_reports_missing_file(tmp_path, monkeypatch, capsys):
     captured = capsys.readouterr()
     assert exit_code == 1
     assert "could not read" in captured.err
+
+
+def test_hook_status_json_includes_shells_active_sessions_and_limitations(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    fake_result = [{"shell": "bash", "path": tmp_path / ".bashrc", "hook_present": True}]
+    with patch("termlog.hook_targets.status", return_value=fake_result), patch(
+        "termlog.state.get_hook_installed_at", return_value="2026-01-01T00:00:00"
+    ), patch(
+        "termlog.state.list_active_sessions",
+        return_value=[
+            {"pid": 1234, "project_path": "E:/proj", "log_path": "/tmp/session.log", "started_at": "2026-01-01T00:00:00"}
+        ],
+    ):
+        exit_code = main(["hook", "status", "--json"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["installed"] is True
+    assert payload["installed_at"] == "2026-01-01T00:00:00"
+    assert payload["shells"][0]["shell"] == "bash"
+    assert payload["active_sessions"][0]["pid"] == 1234
+    assert len(payload["limitations"]) > 0
+
+
+def test_log_view_follow_strips_ansi_from_new_lines(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    log_file = tmp_path / "session.log"
+    log_file.write_text("\x1b[93mhello\x1b[m\n", encoding="utf-8")
+
+    call_count = {"n": 0}
+    real_readline = None
+
+    def fake_sleep(_seconds):
+        call_count["n"] += 1
+        if call_count["n"] >= 2:
+            raise KeyboardInterrupt
+
+    with patch("time.sleep", side_effect=fake_sleep):
+        try:
+            main(["log", "view", str(log_file), "--follow"])
+        except KeyboardInterrupt:
+            pass
+
+    captured = capsys.readouterr()
+    assert "hello" in captured.out
+    assert "\x1b" not in captured.out

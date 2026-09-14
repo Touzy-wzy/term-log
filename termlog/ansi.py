@@ -30,10 +30,27 @@ _LEFTOVER_ESCAPE_PATTERN = re.compile(r"\x1b.?")
 _CONTROL_CHAR_PATTERN = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
+def _apply_backspaces(text: str) -> str:
+    # A backspace byte means "erase the character before me", not "remove
+    # yourself and leave your neighbors untouched". Dropping \x08 without
+    # this interpretation turns an edited command line (typo, then
+    # backspace, then retype) into garbled text, e.g. "l\x08ls" naively
+    # loses only the \x08 and reads as "lls" instead of "ls".
+    result = []
+    for ch in text:
+        if ch == "\x08":
+            if result:
+                result.pop()
+        else:
+            result.append(ch)
+    return "".join(result)
+
+
 def strip_ansi(text: str) -> str:
     text = _OSC_PATTERN.sub("", text)
     text = _CSI_PATTERN.sub("", text)
     text = _SIMPLE_ESCAPE_PATTERN.sub("", text)
     text = _LEFTOVER_ESCAPE_PATTERN.sub("", text)
+    text = _apply_backspaces(text)
     text = _CONTROL_CHAR_PATTERN.sub("", text)
     return text

@@ -1,3 +1,5 @@
+import os
+
 from termlog import paths, state
 
 
@@ -87,3 +89,32 @@ def test_clear_hook_installed_at_removes_timestamp(tmp_path, monkeypatch):
     state.mark_hook_installed()
     state.clear_hook_installed_at()
     assert state.get_hook_installed_at() is None
+
+
+def test_save_active_session_persists_entry(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    state.save_active_session(pid=os.getpid(), log_path="/tmp/session.log", project_path="E:/proj")
+    sessions = state.list_active_sessions()
+    assert len(sessions) == 1
+    assert sessions[0]["pid"] == os.getpid()
+    assert sessions[0]["log_path"] == "/tmp/session.log"
+    assert sessions[0]["project_path"] == "E:/proj"
+    assert "started_at" in sessions[0]
+
+
+def test_remove_active_session_deletes_entry(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    state.save_active_session(pid=os.getpid(), log_path="/tmp/session.log", project_path="E:/proj")
+    state.remove_active_session(pid=os.getpid())
+    assert state.list_active_sessions() == []
+
+
+def test_list_active_sessions_prunes_dead_pids(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    # A pid that's essentially guaranteed not to be alive.
+    dead_pid = 999999
+    state.save_active_session(pid=dead_pid, log_path="/tmp/dead.log", project_path="E:/proj")
+    assert state.list_active_sessions() == []
+    # The stale entry should also have been pruned from the underlying state.
+    data = state.load_state()
+    assert str(dead_pid) not in data.get("active_sessions", {})

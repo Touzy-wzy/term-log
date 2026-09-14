@@ -35,3 +35,30 @@ def test_recorded_session_end_writes_exit_code_and_closes(tmp_path, monkeypatch)
     assert "session_end" in content
     assert "exit_code=1" in content
     assert session.writer._fh.closed
+
+
+def test_recorded_session_start_registers_active_session(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    from termlog import state
+
+    session = RecordedSession("E:/proj")
+    session.start(shell_name="bash")
+
+    sessions = state.list_active_sessions()
+    assert len(sessions) == 1
+    assert sessions[0]["pid"] == os.getpid()
+    assert sessions[0]["project_path"] == "E:/proj"
+    assert sessions[0]["log_path"] == str(session.writer.current_path)
+
+    session.end(exit_code=0)
+
+
+def test_recorded_session_end_clears_active_session(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERMLOG_HOME", str(tmp_path))
+    from termlog import state
+
+    session = RecordedSession("E:/proj")
+    session.start(shell_name="bash")
+    session.end(exit_code=0)
+
+    assert state.list_active_sessions() == []
